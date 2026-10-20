@@ -68,9 +68,13 @@ describe("Aries adapter integration with synthetic transport", () => {
     expect(enable).toEqual({ enableTrading: true });
     expect(instance.config).toEqual(initialConfig);
     const updated = { ...instance, config: { ...instance.config, ...enable } };
+    // Simulation does not run extended-hours orders; a profile that can reach a live account offers them.
     expect(broker.getTradingCapabilities!(updated, order().contract)).toMatchObject({
-      enabled: true, fractionalQuantity: true, shortSelling: false, extendedHours: true,
-      extendedHoursTif: ["DAY", "EXTENDED_HOURS"], priceDecimals: 5, modify: true, cancel: true,
+      enabled: true, fractionalQuantity: true, shortSelling: false, extendedHours: false, extendedHoursTif: [], priceDecimals: 5, modify: true, cancel: true,
+    });
+    expect(broker.getTradingCapabilities!(updated, order().contract).tif).not.toContain("EXTENDED_HOURS");
+    expect(broker.getTradingCapabilities!({ ...updated, config: { ...updated.config, accounts: "both" } }, order().contract)).toMatchObject({
+      extendedHours: true, extendedHoursTif: ["DAY", "EXTENDED_HOURS"],
     });
     expect(broker.getTradingCapabilities!({ ...updated, enabled: false }).enabled).toBe(false);
     expect(broker.getTradingConfigUpdate!(updated, false)).toEqual({ enableTrading: false });

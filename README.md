@@ -27,7 +27,7 @@ Keep credentials out of shell arguments, pane parameters, screenshots and shared
 | Order updates | Pushed over Aries' account WebSocket: fills, cancels, replacements and rejections reach Gloom's order list and notifications as they happen. Gloom polls open orders while the socket is down. |
 | Charts | Intraday to monthly bars from `/v1/chart/history`, including pre- and post-market bars when the chart asks for extended hours. |
 | Options | Chains with bid, ask, last, volume, open interest and implied volatility, standard 100-share contracts. |
-| Orders | Market, limit, stop and stop-limit for stocks and ETFs, with Aries' time-in-force choices and extended hours. Single options and spreads of 2 to 4 legs, DAY or GTC. Preview, place, change and cancel. |
+| Orders | Market, limit, stop and stop-limit for stocks and ETFs, with Aries' time-in-force choices, and extended hours on live accounts. Single options and spreads of 2 to 4 legs, DAY or GTC. Preview, place, change and cancel. |
 | Order history | 90 days of order history as cumulative fills per order (and per leg), not individual executions. |
 
 See [trading](docs/trading.md) for the order mapping and [Aries API notes](docs/aries-api-notes.md) for API behavior the adapter works around.
@@ -38,7 +38,7 @@ Not supported: Level 2, time and sales and streamed Greeks, explicit sell-short 
 
 Trading is off until enabled per profile. With it off, preview, placement, changes and cancellation fail before any request reaches Aries; reading orders still works. Every order needs an explicitly selected account, never a silent live fallback, and the preview repeats whether the account is simulation or live. Gloom's ticket adds review and typed confirmation for live accounts.
 
-An acknowledgement is not a fill. A timeout can leave an order's outcome unknown: refresh orders, or check in Aries, before trying again. The adapter never retries an order request on its own.
+An acknowledgement is not a fill. When Aries refuses a change or cancel, Gloom reads the order again and says what became of it. A timeout leaves the outcome unknown until Aries reports the order. The adapter never retries an order request on its own.
 
 On a simulation account, stock orders were placed and cancelled, and single options and spreads placed, changed and cancelled, against the Aries API. Live-account orders are not verified.
 

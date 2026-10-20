@@ -41,7 +41,7 @@ The adapter opens two sockets per profile, each only while something needs it: t
 - **A cancel is a new row.** In `/orders/history` (newest first), a cancel or replace is a new row with a new `clOrdId` whose `origClOrdId` names the order it acted on. The adapter follows that link to read an order's latest status, and keeps the order's host handle on the newer row. A replacement's new `clOrdId` becomes the order's native ID; a cancel's does not, since it names a request, not an order. The account socket pushes these rows the same way.
 - The open-orders endpoint also returned already cancelled orders. The adapter filters final states.
 - Order reads carry `"0"` for prices the type does not use (a `stopPrice` on a LIMIT order). Sent back in a replace, that turns the order into a stop order, so the adapter drops prices the type does not use.
-- A stock LIMIT order with `timeInForce: EXTENDED_HOURS`, placed in a simulation account during regular hours, stayed `PENDING_NEW` with text "upstream pending" for hours and was never updated. Simulation may not process EXTENDED_HOURS orders.
+- Simulation does not run `timeInForce: EXTENDED_HOURS` orders. Three stock LIMIT orders, placed during regular hours on two days, stayed `PENDING_NEW` with text "upstream pending" and were never acknowledged; a cancel or replacement came back "TE: Order cannot be found" and left them pending until they dropped off the list at the end of the day. The adapter does not offer extended hours on a simulation account, and reports a pending order whose cancel or change found nothing as ended (rejected), since it is not working anywhere.
 - Options and spreads accept DAY or GTC only once `legs` is present.
 
 ## Spreads

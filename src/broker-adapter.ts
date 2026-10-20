@@ -192,7 +192,8 @@ export function createAriesBroker(options: AriesBrokerOptions = {}): BrokerAdapt
     getOrderStatus: (instance, orderId) => run(instance, (s) => s.orders.getOrderStatus(orderId)),
     listExecutions: (instance) => run(instance, (s) => s.orders.listExecutions()),
     getTradingCapabilities(instance, contract) {
-      const capabilities = ariesOrderCapabilities(contract, instance.id);
+      // Simulation does not run extended-hours orders (docs/aries-api-notes.md), so a simulation-only profile does not offer them.
+      const capabilities = ariesOrderCapabilities(contract, instance.id, { extendedHours: ariesConfig(instance.config).accounts !== "simulation" });
       if (instance.enabled === false) return { ...capabilities, enabled: false, disabledReason: "Enable and connect this Aries profile before trading." };
       if (!ariesConfig(instance.config).enableTrading) return { ...capabilities, enabled: false, disabledReason: "Trading is off. Enable trading for this Aries profile before continuing." };
       return capabilities;

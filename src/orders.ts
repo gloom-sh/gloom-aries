@@ -76,12 +76,25 @@ const terminal = new Set(["FILLED", "CANCELED", "REJECTED", "EXPIRED", "CALCULAT
  * effect") while it still works; only history's superseded versions are done.
  */
 const working = (source: Row): Row => source.ordStatus === "REPLACED" && (number(source.leavesQty) ?? 0) > 0 ? { ...source, ordStatus: "NEW" } : source;
+/** Sent and not yet taken by Aries' trading engine: a change or cancel that finds nothing there means it never will be. */
+const pending = new Set(["PENDING_NEW", "PENDING_REPLACE"]);
 const statuses = new Set(["NEW", "PARTIALLY_FILLED", "PENDING_NEW", "PENDING_CANCEL", "PENDING_REPLACE", "DONE_FOR_DAY", "STOPPED", "SUSPENDED", "ACCEPTED_FOR_BID", ...terminal]);
 const tifs: Record<string, string> = {
   DAY: "DAY", GTC: "GTC", IOC: "IOC", FOK: "FOK", EXT: "EXTENDED_HOURS", EXTENDED_HOURS: "EXTENDED_HOURS",
   OPG: "AT_THE_OPENING", ATO: "AT_THE_OPENING", AT_THE_OPENING: "AT_THE_OPENING",
   MOC: "AT_THE_CLOSE", ATC: "AT_THE_CLOSE", AT_THE_CLOSE: "AT_THE_CLOSE",
 };
+
+/**
+ * The order is as it was: Aries answered no, or nothing was sent. The host shows the message as one line and reads the
+ * order again; any other error is a lost answer, whose outcome it treats as unknown.
+ */
+function refused(error: unknown): Error {
+  return Object.assign(error instanceof Error ? error : new Error("Aries did not take this action."), { refused: true });
+}
+
+/** Aries' trading engine has no such order: a change or cancel found nothing, and Aries' text on the order says so. */
+const lostText = (source: Row) => /order cannot be found/i.test(String(source.text ?? ""));
 
 function row(value: unknown): Row {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Row : {};
@@ -197,7 +210,7 @@ function orderContract(contract: BrokerContractRef, instanceId?: string): { symb
 }
 
 /** Describes the same contract rules used by the request mapper without any API access. */
-export function ariesOrderCapabilities(contract?: BrokerContractRef, instanceId?: string): Capabilities {
+export function ariesOrderCapabilities(contract?: BrokerContractRef, instanceId?: string, { extendedHours = true }: { extendedHours?: boolean } = {}): Capabilities {
   let option: OptionDetails | undefined;
   let spread = false;
   try { if (contract) ({ option, spread = false } = orderContract(contract, instanceId)); }
@@ -209,8 +222,8 @@ export function ariesOrderCapabilities(contract?: BrokerContractRef, instanceId?
     shortSelling: false, minQuantity: 1, quantityStep: 1, priceDecimals: 2, modify: true, cancel: true, executionKind: "order-summaries", maxLegs: MAX_LEGS };
   return {
     enabled: true, orderTypes: ["MKT", "LMT", "STP", "STP LMT"],
-    tif: option ? ["DAY", "GTC"] : [...new Set(Object.values(tifs))],
-    extendedHours: !option, extendedHoursTif: option ? [] : ["DAY", "EXTENDED_HOURS"],
+    tif: option ? ["DAY", "GTC"] : [...new Set(Object.values(tifs))].filter((tif) => extendedHours || tif !== "EXTENDED_HOURS"),
+    extendedHours: !option && extendedHours, extendedHoursTif: option || !extendedHours ? [] : ["DAY", "EXTENDED_HOURS"],
     fractionalQuantity: !option, shortSelling: false, ...(option ? { minQuantity: 1, quantityStep: 1 } : {}),
     priceDecimals: 5, modify: true, cancel: true, executionKind: "order-summaries",
   };
@@ -225,6 +238,8 @@ export class AriesOrderService {
   private readonly ids = new Map<string, number>();
   private readonly orders = new Map<number, StoredOrder>();
   private readonly busy = new Set<number>();
+  /** Orders Aries' trading engine could not find when asked to change or cancel them, by account and client ID. */
+  private readonly lost = new Set<string>();
   private mutationVersion = 0;
   private readonly now: () => number;
 
@@ -282,7 +297,7 @@ export class AriesOrderService {
 
   private async body(request: LegRequest, positionEffect?: "OPEN" | "CLOSE", legEffects?: Readonly<Record<string, "OPEN" | "CLOSE">>): Promise<AriesOrderBody> {
     this.trading();
-    await this.account(request.accountId);
+    const account = await this.account(request.accountId);
     if (request.brokerInstanceId && request.brokerInstanceId !== this.options.brokerInstanceId) throw new Error("The order belongs to a different broker profile.");
     const contract = request.contract;
     const { symbol, option, spread } = orderContract(contract, this.options.brokerInstanceId);
@@ -297,6 +312,8 @@ export class AriesOrderService {
       if (option || !["DAY", "EXTENDED_HOURS"].includes(tif)) throw new Error("Extended hours require an equity order with DAY time in force.");
       timeInForce = "EXTENDED_HOURS";
     }
+    // Simulation never acknowledged one: every extended-hours order stayed pending, then could not be cancelled.
+    if (timeInForce === "EXTENDED_HOURS" && account.isSim) throw new Error("Aries simulation does not run extended-hours orders.");
     if ((option || spread) && !["DAY", "GTC"].includes(timeInForce)) throw new Error("Aries option orders support DAY and GTC only.");
     if ((option || spread) && !Number.isInteger(request.quantity)) throw new Error("Option quantity must be a whole number of contracts.");
     if (spread && !["MARKET", "LIMIT"].includes(type)) throw new Error("Aries takes market and limit spreads.");
@@ -443,7 +460,9 @@ export class AriesOrderService {
     const contract = this.contract(source, fallback?.contract);
     const quantity = number(source.qty) ?? fallback?.quantity ?? 0;
     const filled = number(source.cumQty) ?? previous?.order.filled ?? 0;
-    const status = statuses.has(String(source.ordStatus ?? source.status)) ? String(source.ordStatus ?? source.status) : "UNKNOWN";
+    const reported = statuses.has(String(source.ordStatus ?? source.status)) ? String(source.ordStatus ?? source.status) : "UNKNOWN";
+    // An order Aries' engine could not find stays pending in Aries' lists; it is not working anywhere.
+    const status = pending.has(reported) && (lostText(source) || this.lost.has(JSON.stringify([account.accountId, clOrdId]))) ? "REJECTED" : reported;
     const rawSide = string(source.side) ?? fallback?.action ?? "";
     if (!["BUY", "BUY_TO_COVER", "SELL", "SELL_SHORT", "SELL_SHORT_EXEMPT"].includes(rawSide)) throw new Error("Aries returned an unsupported order side.");
     const rawType = string(source.type) ?? (fallback ? orderTypes[fallback.orderType] : undefined);
@@ -491,94 +510,112 @@ export class AriesOrderService {
     return order;
   }
 
-  private accepted(response: Row): void {
+  private accepted(response: Row, action: "place" | "replace" | "cancel", stored?: StoredOrder): void {
     if (response.success === true && response.status !== "REJECTED") return;
+    // Only an explicit rejection proves nothing changed; any other answer leaves the outcome unknown.
+    if (response.success !== false && response.status !== "REJECTED") throw new Error("Aries did not confirm this action.");
     // Aries' rejection text is not shown as it comes, since it may carry identifiers; reasons known to be
     // safe are named.
     const text = [response.text, response.ordRejReason, response.message].filter((value) => typeof value === "string").join(" ");
-    const known = /order cannot be found/i.test(text) ? " Aries cannot find this order." : "";
-    throw new Error(`Aries did not accept this order action.${known} Refresh orders and review the account in Aries before retrying.`);
+    if (stored && /order cannot be found/i.test(text)) {
+      // An order Aries never acknowledged, which its engine cannot find, is not working anywhere (an extended-hours
+      // order in simulation stayed so all day): it is reported ended, so it leaves open orders and the chart.
+      if (!pending.has(stored.order.status)) throw refused(new Error("Aries cannot find this order."));
+      this.lost.add(JSON.stringify([stored.accountId, stored.clOrdId]));
+      stored.order.status = "REJECTED";
+      throw refused(new Error("Aries never placed this order."));
+    }
+    throw refused(new Error(action === "place" ? "Aries rejected this order." : action === "cancel" ? "Aries refused the cancel." : "Aries refused the change."));
   }
 
-  private acceptMutation(stored: StoredOrder, response: Row): void {
+  private acceptMutation(stored: StoredOrder, response: Row, action: "replace" | "cancel"): void {
     // Only an explicit rejection proves the old order is unchanged. A malformed or
     // incomplete acknowledgement needs reconciliation before another mutation.
     if (response.success !== false && response.status !== "REJECTED") stored.order.status = "UNKNOWN";
-    this.accepted(response);
+    this.accepted(response, action, stored);
   }
 
   async placeOrder(request: LegRequest): Promise<BrokerOrder> {
-    const body = await this.body(request);
-    const account = await this.account(request.accountId);
-    // A new preview catches blocking risk errors even when a caller bypasses the host ticket.
-    await this.preview(body, account.isSim);
-    this.trading();
+    const { body, account } = await (async () => {
+      const body = await this.body(request);
+      const account = await this.account(request.accountId);
+      // A new preview catches blocking risk errors even when a caller bypasses the host ticket.
+      await this.preview(body, account.isSim);
+      this.trading();
+      return { body, account };
+    })().catch((error) => { throw refused(error); });
     const response = row(await this.client.post<unknown>("/v1/orders", body));
-    this.accepted(response);
+    this.accepted(response, "place");
     return this.remember({ ...body, ...response }, account, request);
   }
 
   private async stored(orderId: number, action: "modify" | "cancel"): Promise<StoredOrder> {
     this.trading();
     const stored = this.orders.get(orderId);
-    if (!stored) throw new Error("This order is not known in the current Aries session. Refresh open orders before changing it.");
+    if (!stored) throw refused(new Error("This order is not known in the current Aries session."));
     // Lock before the account lookup yields, otherwise a concurrent refresh can
     // replace this record before the caller receives it.
-    this.reserve(orderId);
+    try { this.reserve(orderId); } catch (error) { throw refused(error); }
     try {
       await this.account(stored.accountId);
       if (!stored.mutable) throw new Error("This order cannot be changed safely through Gloom. Manage it in Aries.");
-      if (terminal.has(stored.order.status)) throw new Error("This order is no longer open. Refresh open orders before changing it.");
+      if (terminal.has(stored.order.status)) throw new Error("This order is no longer open.");
       if (stored.order.status === "PENDING_CANCEL") throw new Error("This order is already being cancelled.");
       // An order Aries is still replacing can be cancelled, not replaced again.
       if (stored.order.status === "PENDING_REPLACE" && action === "modify") throw new Error("Aries has not taken the last change yet. Wait for it, or cancel the order.");
       // A replacement of an order Aries has not acknowledged lost the order in simulation: it stayed pending
       // replace with "Order cannot be found".
       if (stored.order.status === "PENDING_NEW" && action === "modify") throw new Error("Aries has not acknowledged this order yet. Wait for it to work, or cancel it.");
-      if (stored.order.status === "UNKNOWN") throw new Error("The order status needs confirmation. Refresh open orders before changing it.");
+      if (stored.order.status === "UNKNOWN") throw new Error("Aries has not confirmed this order's last change yet.");
       return stored;
-    } catch (error) { this.release(orderId); throw error; }
+    } catch (error) { this.release(orderId); throw refused(error); }
   }
 
   async modifyOrder(orderId: number, request: LegRequest): Promise<BrokerOrder> {
     const stored = await this.stored(orderId, "modify");
     try {
-      if (request.accountId !== stored.accountId) throw new Error("A replacement must use the original selected account.");
-      if (!sameContract(stored.order.contract, request.contract) || request.action !== stored.order.action) throw new Error("A replacement cannot change the instrument or order side.");
-      if (stored.order.contract.secType === "OPT" && !stored.positionEffect) throw new Error("The original option position effect is unavailable. Manage this order in Aries.");
-      const storedLegs = (stored.order as LegOrder).legs;
-      // Aries may list the legs in another order than they were sent.
-      const legKey = (legs: readonly HostOrderLeg[]) => JSON.stringify(legs.map((leg) => [optionDetails(leg.contract).localSymbol, leg.action, leg.ratio]).sort());
-      if (storedLegs && legKey(storedLegs) !== legKey(request.legs ?? [])) throw new Error("A replacement keeps the spread's legs.");
-      const body = await this.body(request, stored.positionEffect, stored.legEffects);
-      // A spread's side is its last leg's, which the body has just set.
-      if (stored.order.contract.secType !== "BAG") body.side = String(stored.cancel.side);
-      const account = await this.account(stored.accountId);
-      this.trading();
+      const { body, account } = await this.replacement(stored, request).catch((error) => { throw refused(error); });
       let response: Row;
       try { response = row(await this.client.post<unknown>("/v1/orders/replace", { ...body, origClOrdId: stored.clOrdId })); }
       catch (error) { stored.order.status = "UNKNOWN"; throw error; }
-      this.acceptMutation(stored, response);
+      this.acceptMutation(stored, response, "replace");
       // A replacement has a new client ID. Keep the host ID attached to the current ID.
       // Save it immediately; no follow-up read may prevent retaining the new ID.
       return this.remember({ ...body, ...response, status: response.status === "REPLACED" ? "NEW" : response.status }, account, request, orderId);
     } finally { this.release(orderId); }
   }
 
+  /** A replacement's body, checked against the order it replaces; nothing is sent. */
+  private async replacement(stored: StoredOrder, request: LegRequest): Promise<{ body: AriesOrderBody; account: { accountId: string; isSim: boolean } }> {
+    if (request.accountId !== stored.accountId) throw new Error("A replacement must use the original selected account.");
+    if (!sameContract(stored.order.contract, request.contract) || request.action !== stored.order.action) throw new Error("A replacement cannot change the instrument or order side.");
+    if (stored.order.contract.secType === "OPT" && !stored.positionEffect) throw new Error("The original option position effect is unavailable. Manage this order in Aries.");
+    const storedLegs = (stored.order as LegOrder).legs;
+    // Aries may list the legs in another order than they were sent.
+    const legKey = (legs: readonly HostOrderLeg[]) => JSON.stringify(legs.map((leg) => [optionDetails(leg.contract).localSymbol, leg.action, leg.ratio]).sort());
+    if (storedLegs && legKey(storedLegs) !== legKey(request.legs ?? [])) throw new Error("A replacement keeps the spread's legs.");
+    const body = await this.body(request, stored.positionEffect, stored.legEffects);
+    // A spread's side is its last leg's, which the body has just set.
+    if (stored.order.contract.secType !== "BAG") body.side = String(stored.cancel.side);
+    const account = await this.account(stored.accountId);
+    this.trading();
+    return { body, account };
+  }
+
   async cancelOrder(orderId: number): Promise<void> {
     const stored = await this.stored(orderId, "cancel");
     try {
-      this.trading();
+      try { this.trading(); } catch (error) { throw refused(error); }
       let response: Row;
       try { response = row(await this.client.post<unknown>("/v1/orders/cancel", stored.cancel)); }
       catch (error) { stored.order.status = "UNKNOWN"; throw error; }
-      this.acceptMutation(stored, response);
+      this.acceptMutation(stored, response, "cancel");
       stored.order.status = response.status === "CANCELED" ? "CANCELED" : "PENDING_CANCEL";
     } finally { this.release(orderId); }
   }
 
   private reserve(orderId: number): void {
-    if (this.busy.has(orderId)) throw new Error("An action is already pending for this order. Wait and refresh open orders.");
+    if (this.busy.has(orderId)) throw new Error("An action is already pending for this order.");
     this.busy.add(orderId);
     this.mutationVersion++;
   }
@@ -616,7 +653,9 @@ export class AriesOrderService {
     const output: BrokerOrder[] = [];
     for (const account of await this.options.accounts()) {
       for (const source of await this.pages(account.accountId, false)) {
-        if (!terminal.has(String(source.ordStatus))) output.push(this.remember(source, account, undefined, undefined, snapshotVersion));
+        if (terminal.has(String(source.ordStatus))) continue;
+        const order = this.remember(source, account, undefined, undefined, snapshotVersion);
+        if (!terminal.has(order.status)) output.push(order);
       }
     }
     return output;

@@ -202,14 +202,18 @@ describe("Aries order requests against a recording loopback server", () => {
 
   test.each(["DAY", "GTC", "IOC", "FOK", "EXTENDED_HOURS", "AT_THE_OPENING", "AT_THE_CLOSE"])("preserves supported equity TIF %s", async (tif) => {
     const { service, records } = mock();
-    await service.previewOrder(request({ tif }));
+    await service.previewOrder(request({ tif, accountId: accounts[1]!.accountId }));
     expect(records[0]?.body?.timeInForce).toBe(tif);
   });
 
   test("maps extended hours explicitly and rejects conflicting TIF", async () => {
     const { service, records } = mock();
-    await service.previewOrder(request({ outsideRth: true }));
+    await service.previewOrder(request({ outsideRth: true, accountId: accounts[1]!.accountId }));
     expect(records[0]?.body?.timeInForce).toBe("EXTENDED_HOURS");
+    // Simulation never acknowledged one, so none is sent there.
+    await expect(service.previewOrder(request({ outsideRth: true }))).rejects.toThrow("simulation does not run extended-hours orders");
+    await expect(service.previewOrder(request({ tif: "EXTENDED_HOURS" }))).rejects.toThrow("simulation does not run extended-hours orders");
+    expect(records).toHaveLength(1);
     await expect(service.previewOrder(request({ tif: "GTC", outsideRth: true }))).rejects.toThrow("Extended hours require");
     await expect(service.previewOrder(request({ tif: "GTD" }))).rejects.toThrow("time in force");
   });
@@ -484,8 +488,9 @@ describe("Aries order records and ID lifecycle", () => {
     };
     const service = new AriesOrderService(client, { accounts: async () => [accounts[0]!], tradingEnabled: () => true });
     const id = (await service.listOpenOrders())[0]!.orderId;
-    await expect(service.cancelOrder(id)).rejects.toThrow("Request failed");
-    await expect(service.cancelOrder(id)).rejects.toThrow("status needs confirmation");
+    // A lost answer is not a refusal: the host keeps the outcome unknown.
+    expect(await service.cancelOrder(id).catch((error: { refused?: boolean }) => error.refused)).toBeUndefined();
+    await expect(service.cancelOrder(id)).rejects.toThrow("has not confirmed this order's last change");
     expect(writes).toBe(1);
     await service.listOpenOrders();
     await expect(service.cancelOrder(id)).rejects.toThrow("Request failed");
@@ -562,7 +567,7 @@ describe("Aries order records and ID lifecycle", () => {
     expect(await cancellation).toBeInstanceOf(Error);
     readRelease.resolve();
     await staleRefresh;
-    await expect(service.cancelOrder(id)).rejects.toThrow("status needs confirmation");
+    await expect(service.cancelOrder(id)).rejects.toThrow("has not confirmed this order's last change");
     expect(posts).toBe(1);
   });
 
@@ -581,7 +586,7 @@ describe("Aries order records and ID lifecycle", () => {
     await service.listExecutions();
     release.resolve();
     expect(await replacement).toBeInstanceOf(Error);
-    await expect(service.modifyOrder(id, request())).rejects.toThrow("status needs confirmation");
+    await expect(service.modifyOrder(id, request())).rejects.toThrow("has not confirmed this order's last change");
     expect(posts).toBe(1);
   });
 
@@ -617,7 +622,7 @@ describe("Aries order records and ID lifecycle", () => {
       : { success: true, status: "REPLACED" });
     const id = (await service.listOpenOrders())[0]!.orderId;
     await expect(service.modifyOrder(id, request())).rejects.toThrow("order identifier");
-    await expect(service.modifyOrder(id, request())).rejects.toThrow("status needs confirmation");
+    await expect(service.modifyOrder(id, request())).rejects.toThrow("has not confirmed this order's last change");
     expect(records.filter((record) => record.method === "POST")).toHaveLength(1);
   });
 
@@ -650,15 +655,31 @@ describe("Aries order records and ID lifecycle", () => {
       ? { orders: [active()], nextCursor: 0 }
       : { success: false, status: "REJECTED", text: "synthetic-secret", ordRejReason: "synthetic-secret" });
     const id = (await service.listOpenOrders())[0]!.orderId;
-    let message = "";
-    try { await service.cancelOrder(id); } catch (error) { message = (error as Error).message; }
-    expect(message).toContain("did not accept");
-    expect(message).not.toContain("synthetic-secret");
-    await expect(service.cancelOrder(id)).rejects.toThrow("did not accept");
+    const failure = await service.cancelOrder(id).catch((error: Error & { refused?: boolean }) => error);
+    // One line, flagged as refused: the order is as it was, so the host reads it again rather than calling it unknown.
+    expect(failure).toMatchObject({ message: "Aries refused the cancel.", refused: true });
+    expect(failure!.message).not.toContain("synthetic-secret");
+    await expect(service.cancelOrder(id)).rejects.toThrow("Aries refused the cancel.");
     expect(records.at(-1)?.body?.origClOrdId).toBe("synthetic-client-001");
     const lost = mock({ accounts: async () => [accounts[0]!] }, (record) => record.method === "GET"
       ? { orders: [active()], nextCursor: 0 } : { success: false, status: "REJECTED", text: "TE: Order cannot be found" });
     await expect(lost.service.cancelOrder((await lost.service.listOpenOrders())[0]!.orderId)).rejects.toThrow("Aries cannot find this order.");
+  });
+
+  test("an order Aries never acknowledged and its engine cannot find is reported ended, not open", async () => {
+    // Seen in simulation: an extended-hours order stayed PENDING_NEW all day, and its cancel came back "Order cannot be found".
+    let text = "upstream pending";
+    const { service } = mock({ accounts: async () => [accounts[0]!] }, (record) => record.method === "GET"
+      ? { orders: [active({ ordStatus: "PENDING_NEW", cumQty: "0", leavesQty: "10", text })], nextCursor: 0 }
+      : { success: false, status: "REJECTED", text: "TE: Order cannot be found" });
+    const [order] = await service.listOpenOrders();
+    await expect(service.cancelOrder(order!.orderId)).rejects.toMatchObject({ message: "Aries never placed this order.", refused: true });
+    expect(await service.listOpenOrders()).toEqual([]);
+    expect(await service.getOrderStatus(order!.orderId)).toMatchObject({ status: "REJECTED", filled: 0 });
+    // Aries' own text on the order says so too, for a session that did not send the cancel.
+    text = "TE: Order cannot be found";
+    const { service: later } = mock({ accounts: async () => [accounts[0]!] }, () => ({ orders: [active({ ordStatus: "PENDING_NEW", cumQty: "0", leavesQty: "10", text })], nextCursor: 0 }));
+    expect(await later.listOpenOrders()).toEqual([]);
   });
 });
 
