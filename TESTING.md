@@ -53,7 +53,7 @@ Use a limit far from the market so nothing fills.
 - The time (with time zone) and the symbol, so we can match it to our logs.
 - What you'd expect a professional trader to need that's missing.
 
-Send it to vince@gloom.sh.
+Send it to hello@gloom.sh.
 
 ## Remove everything
 
