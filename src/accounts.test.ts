@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { mapBalance, mapPositions, parseAccounts } from "./accounts";
-import { ariesConfig, assertLocalProfile } from "./config";
+import { ariesConfig, assertLocalProfile, hostKeepsMarketDataLocal } from "./config";
 
 const sim = { trading_account_id: "SIM-SYNTHETIC", broker_account_id: "BROKER-WRONG", id: 42, is_sim: true, account_type: "INDIVIDUAL", account_class: "CASH", status: "OPEN" };
 const live = { ...sim, trading_account_id: "LIVE-SYNTHETIC", is_sim: false };
@@ -14,8 +14,11 @@ test("account routing uses trading IDs, defaults to sim and clearly labels both"
   expect(ariesConfig({}).accounts).toBe("simulation");
   expect(ariesConfig({}).enableTrading).toBe(false);
   expect(() => parseAccounts({ accounts: [{ id: 42 }] }, "both")).toThrow("trading ID");
-  expect(() => assertLocalProfile({ disabledPlugins: [] })).toThrow("dedicated local profile");
-  expect(() => assertLocalProfile({ disabledPlugins: ["gloomberb-cloud"] })).not.toThrow();
+  // This Gloom keeps Aries market data local with Cloud on; an older one would sync it, so there Cloud must be off.
+  expect(hostKeepsMarketDataLocal).toBe(true);
+  expect(() => assertLocalProfile({ disabledPlugins: [] })).not.toThrow();
+  expect(() => assertLocalProfile({ disabledPlugins: [] }, false)).toThrow("would sync Aries market data to Gloom Cloud");
+  expect(() => assertLocalProfile({ disabledPlugins: ["gloomberb-cloud"] }, false)).not.toThrow();
 });
 
 test("decimal balances distinguish missing values from zero", () => {

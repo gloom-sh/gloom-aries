@@ -68,8 +68,8 @@ export function createAriesBroker(options: AriesBrokerOptions = {}): BrokerAdapt
   };
   const sockets = options.sockets ?? true;
   const local = () => {
-    if (!options.assertLocal) throw new AriesSessionError("Aries requires a dedicated local profile with Gloom Cloud disabled.");
-    try { options.assertLocal(); } catch (error) { throw new AriesSessionError(error instanceof Error ? error.message : "Aries requires a dedicated local profile with Gloom Cloud disabled."); }
+    if (!options.assertLocal) throw new AriesSessionError("Aries cannot confirm its market data stays on this device.");
+    try { options.assertLocal(); } catch (error) { throw new AriesSessionError(error instanceof Error ? error.message : "Aries cannot confirm its market data stays on this device."); }
   };
   const session = (instance: BrokerInstanceConfig): Session => {
     local();
@@ -140,6 +140,8 @@ export function createAriesBroker(options: AriesBrokerOptions = {}): BrokerAdapt
   };
   return {
     id: "aries", name: "Aries", configSchema: ARIES_CONFIG_FIELDS,
+    // Gloom never uploads Aries quotes or bars to Cloud (the API terms); accounts sync unless the user keeps them local.
+    localMarketData: true,
     async validate(instance) { const config = ariesConfig(instance.config); return config.clientToken.startsWith("ARI-PERSONAL-TK.") && !!config.clientSecret; },
     async connect(instance) {
       // Reconnecting a connected profile keeps it usable until the answer.
@@ -208,7 +210,7 @@ export function createAriesBroker(options: AriesBrokerOptions = {}): BrokerAdapt
   };
 }
 
-let assertRuntimeLocal: () => void = () => { throw new Error("Open Aries in a dedicated local profile with Gloom Cloud disabled."); };
+let assertRuntimeLocal: () => void = () => { throw new Error("Aries has not finished loading in this profile."); };
 let runtimeInstance: (id: string) => BrokerInstanceConfig | undefined = () => undefined;
 export function setAriesLocalGuard(guard: () => void, getInstance?: (id: string) => BrokerInstanceConfig | undefined): void {
   assertRuntimeLocal = guard;

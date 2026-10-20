@@ -27,9 +27,10 @@ bun run desktop:dev                          # or: bun dev for the terminal
 
 ## 3. Connect
 
-1. Open **Plugins** (type `PL`) and switch off **Gloom Cloud** in this profile. The plugin keeps your Aries data local.
-2. Open **Brokers** (`ARA`), choose **Add Broker Account**, then **Aries**, and paste the Client ID and Client Secret.
-3. Leave **Accounts** on **Simulation**, and turn **Enable trading** on.
+1. Open **Brokers** (`ARA`), choose **Add Broker Account**, then **Aries**, and paste the Client ID and Client Secret.
+2. Leave **Accounts** on **Simulation**, and turn **Enable trading** on.
+
+Gloom Cloud can stay on: Aries quotes and charts stay on your machine. Your accounts and positions sync like any broker's, unless you set **Account data** to **Keep on this device**.
 
 Your simulation account and positions appear in Brokers and Portfolio.
 

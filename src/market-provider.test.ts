@@ -76,13 +76,13 @@ test("rejects ambiguous profiles and mismatched instrument identities before tra
   expect(f.calls).toEqual([]);
 });
 
-test("enforces the local-profile guard and US instrument scope on every request", () => {
+test("keeps to US instruments and an enabled Aries profile on every request, with Gloom Cloud on or off", () => {
   const f = fixture();
   expect(f.provider.canProvide!("AAPL", "NASDAQ")).toBe(true);
   expect(f.provider.canProvide!("SHEL", "LSE")).toBe(false);
   expect(f.provider.canProvide!("AAPL", "NASDAQ", { brokerId: "another-broker" })).toBe(false);
   f.setConfig({ ...config(), disabledPlugins: [] });
-  expect(() => f.provider.getQuote("AAPL")).toThrow("dedicated local profile");
+  expect(f.provider.canProvide!("AAPL", "NASDAQ")).toBe(true);
   f.setConfig(config([{ ...instance, enabled: false }]));
   expect(() => f.provider.getQuote("AAPL")).toThrow("Connect an Aries profile");
   expect(f.calls).toEqual([]);
@@ -122,7 +122,7 @@ test("supports the host OPTIONS namespace and filters unsupported or foreign str
 
 test("availability probes and subscriptions do not throw during setup, disabled profiles or ambiguous profiles", () => {
   const f = fixture();
-  for (const unavailable of [config([]), config([{ ...instance, enabled: false }]), config([instance, { ...instance, id: "second" }]), { ...config(), disabledPlugins: [] }]) {
+  for (const unavailable of [config([]), config([{ ...instance, enabled: false }]), config([instance, { ...instance, id: "second" }])]) {
     f.setConfig(unavailable);
     expect(f.provider.canProvide!("AAPL", "NASDAQ")).toBe(false);
     expect(() => f.provider.subscribeQuotes!([{ symbol: "AAPL", exchange: "NASDAQ" }], () => {})).not.toThrow();

@@ -1,3 +1,4 @@
+import * as hostBroker from "gloomberb/broker";
 import type { BrokerConfigField } from "gloomberb/types/broker";
 
 export const ARIES_CONFIG_FIELDS: BrokerConfigField[] = [
@@ -20,8 +21,14 @@ export function ariesConfig(values: Record<string, unknown>) {
   };
 }
 
-export function assertLocalProfile(config: { disabledPlugins?: string[] }): void {
-  if (!config.disabledPlugins?.includes("gloomberb-cloud")) {
-    throw new Error("Aries requires a dedicated local profile with Gloom Cloud disabled. Disable Gloom Cloud in this profile before connecting.");
-  }
+/** Whether this Gloom keeps a broker's market data off Gloom Cloud (`BrokerAdapter.localMarketData`); older versions sync it. */
+export const hostKeepsMarketDataLocal = (hostBroker as unknown as { LOCAL_BROKER_MARKET_DATA?: unknown }).LOCAL_BROKER_MARKET_DATA === true;
+
+/**
+ * Aries quotes and bars must not reach Gloom Cloud. This Gloom keeps them on the device, with Cloud
+ * on; an older one would sync them, so there the profile needs Gloom Cloud switched off.
+ */
+export function assertLocalProfile(config: { disabledPlugins?: string[] }, keepsLocal = hostKeepsMarketDataLocal): void {
+  if (keepsLocal || config.disabledPlugins?.includes("gloomberb-cloud")) return;
+  throw new Error("This version of Gloom would sync Aries market data to Gloom Cloud. Update Gloom, or switch off Gloom Cloud in this profile.");
 }

@@ -71,10 +71,10 @@ describe("Aries account reports", () => {
     expect(f.calls).toEqual(["accounts:second-synthetic-profile"]);
   });
 
-  test("refuses Cloud-enabled profiles before opening a transport", async () => {
+  test("reads a profile with Gloom Cloud on, which keeps Aries data local", async () => {
     const f = fixture();
-    await expect(f.headless.load(args(), context(profiles, []))).rejects.toThrow("dedicated local profile");
-    expect(f.calls).toEqual([]);
+    await f.headless.load(args(), context(profiles, []));
+    expect(f.calls).toEqual(["accounts:synthetic-private-profile"]);
   });
 
   test("disposes on failure and on cancellation", async () => {

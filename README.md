@@ -6,7 +6,7 @@ To try it with a simulation account, follow [TESTING.md](TESTING.md).
 
 ## Setup
 
-1. Use Gloom 0.16.2 or later for accounts, quotes, charts and option chains. Trading needs a Gloom release with the shared order ticket, and spreads one with spread orders. Use a dedicated local profile and turn off **Gloom Cloud** in it before connecting Aries (see [Privacy and storage](#privacy-and-storage)).
+1. Use Gloom 0.16.2 or later for accounts, quotes, charts and option chains. Trading needs a Gloom release with the shared order ticket, and spreads one with spread orders. Gloom Cloud can stay on with a release that keeps Aries market data local; older releases ask you to switch it off (see [Privacy and storage](#privacy-and-storage)).
 2. In [Aries Client Center](https://app.aries.com/client-center/api), open the **API** tab and choose **Generate Key**. Create a personal-token client; its Client ID starts with `ARI-PERSONAL-TK.`. Partner clients do not support this connection method. Save the Client Secret when it is shown, because Aries shows it only once.
 3. Request these scopes:
    - `account:information` for accounts, balances and positions.
@@ -44,11 +44,15 @@ On a simulation account, stock orders were placed and cancelled, and single opti
 
 ## Privacy and storage
 
-Requests go directly from your machine to `https://api.aries.com`. The client-credentials token lives in memory only and is renewed before it expires. Credentials and raw upstream error bodies are never logged or shown.
+Requests go straight from your machine to `https://api.aries.com`. The access token lives in memory only. Credentials and raw Aries error bodies are never logged or shown.
 
-Gloom stores broker configuration and its local backups in plaintext, so protect the profile directory. The keys are saved as `clientToken` and `clientSecret`, which Gloom's sync and feedback redaction filters recognise, and broker configuration never leaves the machine through Cloud sync.
+With Gloom Cloud on:
 
-Gloom Cloud sync does upload imported holdings, portfolio names and account value summaries. The plugin therefore refuses to connect while Gloom Cloud is enabled in the profile. It cannot stop the host from uploading data imported earlier if Cloud is turned on later, so keep the profile local, and clear its imported data before using it with Cloud. Some host features still reach public Gloom services without Aries data, such as a Treasury yield curve for option analytics.
+- **Syncs:** the profile's name, your Aries accounts, balances and positions, like any broker's. Daily roundups, the weekly brief, position alerts, the mobile app and Ask Gloom use them.
+- **Never leaves your machine:** the Client ID and Client Secret, and Aries quotes and bars. The Aries terms restrict redistributing market data, and Gloom Cloud has its own.
+- **Keep everything local:** in Brokers, edit the Aries profile and set **Account data** to **Keep on this device**. Its accounts and positions then stay off Cloud too, and the features above go without them.
+
+Gloom stores broker settings, Client Secret included, in plaintext in the profile directory, so protect it. Gloom releases from before this sync Aries quotes; there the plugin asks you to switch off Gloom Cloud before it connects.
 
 ## Terms
 

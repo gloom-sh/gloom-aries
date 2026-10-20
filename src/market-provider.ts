@@ -110,7 +110,7 @@ let runtimeConfig: (() => AppConfig) | undefined;
 export function setAriesMarketConfig(getConfig: (() => AppConfig) | undefined): void { runtimeConfig = getConfig; }
 
 export const ariesMarketProvider = createAriesMarketProvider(() => {
-  if (!runtimeConfig) throw new Error("Open Aries in a dedicated local profile first.");
+  if (!runtimeConfig) throw new Error("Aries has not finished loading in this profile.");
   return runtimeConfig();
 });
 export const ariesMarketCapability = assetDataProvider(ariesMarketProvider);
