@@ -1,6 +1,18 @@
 # Trading
 
-The plugin implements Gloom's `BrokerAdapter` order methods: `getTradingCapabilities`, `previewOrder`, `placeOrder`, `modifyOrder`, `cancelOrder`, `listOpenOrders`, `getOrderStatus` and `listExecutions`. Gloom's own order ticket, review, confirmation and Orders view sit on top; the plugin adds no trading pane. Hosts without the shared ticket keep the read-only broker views.
+The plugin implements Gloom's `BrokerAdapter` order methods: `getTradingCapabilities`, `previewOrder`, `placeOrder`, `modifyOrder`, `cancelOrder`, `listOpenOrders`, `getOrderStatus` and `listExecutions`.
+
+Gloom's own order ticket, review, confirmation and Orders view sit on top; the plugin adds no trading pane. Hosts without the shared ticket keep the read-only broker views.
+
+## Safety
+
+Trading is off until enabled per profile. With it off, preview, placement, changes and cancellation fail before any request reaches Aries; reading orders still works.
+
+Every order needs an explicitly selected account, never a silent live fallback, and the preview repeats whether the account is simulation or live. Gloom's ticket adds review, and typed confirmation for live accounts.
+
+An acknowledgement is not a fill. When Aries refuses a change or cancel, Gloom reads the order again and says what became of it. A timeout leaves the outcome unknown until Aries reports the order, and the adapter never retries an order request on its own.
+
+On a simulation account, stock orders were placed and cancelled, and single options and spreads placed, changed and cancelled, against the Aries API. Live-account orders are not verified.
 
 ## Order mapping
 
@@ -23,7 +35,9 @@ The plugin implements Gloom's `BrokerAdapter` order methods: `getTradingCapabili
 
 ## Spreads
 
-Gloom sends a spread as one order on a combo contract (`secType: "BAG"`, the underlying's symbol) with `legs`, each `{ contract, action, ratio }`, and the adapter declares `maxLegs: 4` for it. The order's `action` is BUY for a net debit and SELL for a net credit, and `limitPrice` is the net per spread, always positive. Market and limit, DAY or GTC.
+Gloom sends a spread as one order on a combo contract (`secType: "BAG"`, the underlying's symbol) with `legs`, each `{ contract, action, ratio }`, and the adapter declares `maxLegs: 4` for it.
+
+The order's `action` is BUY for a net debit and SELL for a net credit, and `limitPrice` is the net per spread, always positive. Market and limit, DAY or GTC.
 
 | Gloom | Aries |
 | --- | --- |

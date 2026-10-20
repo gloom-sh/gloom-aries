@@ -2,7 +2,7 @@
 
 About 15 minutes. You need macOS or Linux, Git, and an Aries **simulation** account.
 
-![Gloom's order ticket next to the chart, with a simulation order working](docs/images/ticket-working.png)
+![Gloom's order ticket next to the chart](docs/images/ticket.png)
 
 ## 1. Create an Aries key
 
