@@ -12,8 +12,8 @@ export const ARIES_CONFIG_FIELDS: BrokerConfigField[] = [
   { key: "accounts", label: "Include accounts", type: "select", required: true, defaultValue: "simulation", options: [
     { value: "simulation", label: "Simulation only" }, { value: "live", label: "Live only" }, { value: "both", label: "Simulation and live" },
   ] },
-  { key: "enableTrading", label: "Enable trading", type: "select", required: true, defaultValue: "false", options: [
-    { value: "false", label: "Off (read only)" }, { value: "true", label: "On (orders allowed)" },
+  { key: "enableTrading", label: "Enable trading", type: "select", required: true, defaultValue: "true", options: [
+    { value: "true", label: "On (orders allowed)" }, { value: "false", label: "Off (read only)" },
   ] },
 ];
 
