@@ -2,17 +2,20 @@
 
 ## Requirements
 
-- Gloom 0.16.2 or later for accounts, quotes, charts and option chains.
-- Trading needs a Gloom release with the shared order ticket, and spreads one with spread orders.
-- Gloom Cloud can stay on with a release that keeps Aries market data local. Older releases ask you to switch it off before the plugin connects ([privacy](privacy.md)).
+- Gloom 0.18.2 or later. It has the order ticket and keeps Aries market data on your machine with Gloom Cloud on.
+- The desktop app or the terminal app for signing in. The command line uses a sign-in made there.
 
-## Create a key
+## Sign in
 
-In [Aries Client Center](https://app.aries.com/client-center/api), open the **API** tab and choose **Generate Key**. Create a personal-token client: its Client ID starts with `ARI-PERSONAL-TK.`. Partner clients do not support this connection method.
+Open **Brokers**, add **Aries**, leave **Sign in with** on **Aries account** and press **Connect**. Your browser opens Aries: log in and allow Gloom. Aries sends the browser to `api.gloom.sh`, which passes it straight on to Gloom on `127.0.0.1` port 47613, so that port must be free. No Gloom account is needed.
 
-Save the Client Secret when it is shown, because Aries shows it only once.
+Gloom renews the sign-in on its own. When Aries ends it, the profile says so: press **Connect** to sign in again.
 
-## Scopes
+## Personal API client
+
+To use your own key instead, set **Sign in with** to **Personal API client**. In [Aries Client Center](https://app.aries.com/client-center/api), open the **API** tab and choose **Generate Key**. Create a personal-token client: its Client ID starts with `ARI-PERSONAL-TK.`. Save the Client Secret when it is shown, because Aries shows it only once.
+
+Gloom asks for the same scopes when you sign in. A key needs them too:
 
 | Scope | For |
 | --- | --- |
@@ -22,11 +25,9 @@ Save the Client Secret when it is shown, because Aries shows it only once.
 | `order:information` | Open orders and order history |
 | `order:execution` | Previews and orders, only if you intend to trade |
 
-## Connect
+## Profile settings
 
-Open **Brokers**, add **Aries** and enter the Client ID and Client Secret.
-
-- **Accounts** starts on **Simulation**. Choose **Live** or **Both** only when you mean to import those accounts.
+- **Include accounts** starts on **Simulation**. Choose **Live** or **Both** only when you mean to import those accounts.
 - **Enable trading** starts **Off**.
 - **Account data** decides whether your accounts and positions sync with Gloom Cloud ([privacy](privacy.md)).
 
@@ -37,6 +38,6 @@ Open **Brokers**, add **Aries** and enter the Client ID and Client Secret.
 - With trading on, a ticker's **Trade** tab places orders, and **Orders** lists open orders and history.
 - `ARA` opens Brokers and the read-only **Aries Accounts** report (`gloomberb fn ARA`, `--view positions` for holdings).
 
-## Keep the key safe
+## Keep it safe
 
-Keep credentials out of shell arguments, pane parameters, screenshots and shared layouts. The Client ID field is plain text, so it shows while you edit it, and the Brokers pane can show full account identifiers.
+Keep credentials out of shell arguments, pane parameters, screenshots and shared layouts. A personal Client ID shows while you edit it, and the Brokers pane can show full account identifiers.

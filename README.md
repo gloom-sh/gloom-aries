@@ -6,12 +6,12 @@ Trade your Aries account from Gloom: accounts, live quotes, charts, option chain
 
 ## Set up
 
-1. In [Aries Client Center → API](https://app.aries.com/client-center/api), choose **Generate Key** and copy the Client Secret. It is shown once.
-2. Run `gloomberb install gloom-sh/gloom-aries`.
-3. In Gloom, open **Brokers** (`ARA`), add **Aries** and paste the key.
+1. Install [Gloom](https://gloom.sh) 0.18.2 or later.
+2. Open **Plugins** (`PL`), find **Aries** and install it.
+3. Open **Brokers** (`BR`), add **Aries** and press **Connect**. Sign in to Aries in the browser that opens.
 4. Start on **Simulation**. Turn on **Enable trading** to place orders.
 
-[Setup](docs/setup.md) lists the scopes the key needs. Trading needs a Gloom release with the order ticket; until then, [TESTING.md](TESTING.md) runs the preview.
+[TESTING.md](TESTING.md) walks through a first simulation order. A personal API client from Aries Client Center also works ([setup](docs/setup.md)).
 
 ## What works
 
@@ -23,7 +23,7 @@ Trade your Aries account from Gloom: accounts, live quotes, charts, option chain
 ## Good to know
 
 - Trading is off until you turn it on. A live order asks you to type its symbol.
-- Your key and Aries quotes stay on your machine. Accounts sync with Gloom Cloud unless you keep them local.
+- Your sign-in and Aries quotes stay on your machine. Accounts sync with Gloom Cloud unless you keep them local.
 - Independent plugin, not affiliated with Aries.
 
 ## More

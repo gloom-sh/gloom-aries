@@ -3,10 +3,10 @@
   "name": "Aries",
   "icon": "icon.webp",
   "tagline": "Aries brokerage accounts, quotes and orders",
-  "description": "Connect personal Aries simulation and live accounts to Gloom's broker, portfolio and trading surfaces.",
+  "description": "Sign in with Aries to bring simulation and live accounts into Gloom's broker, portfolio and trading surfaces.",
   "categories": ["broker"],
   "targets": ["cli", "tui", "desktop"],
   "hosts": ["api.aries.com"],
   "contributes": { "broker": true, "shortcuts": [{ "code": "ARA", "name": "Aries Accounts" }] },
-  "minGloom": "0.16.2"
+  "minGloom": "0.18.2"
 }
