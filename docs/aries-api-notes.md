@@ -57,16 +57,18 @@ Legs may also read back in a different order than they were sent.
 ## Access and limits
 
 - Personal-token (client-credentials) access tokens last 900 seconds with no refresh token; the adapter renews in memory before expiry, one renewal at a time.
+- Signed-in (PKCE) access tokens last 3,600 seconds. The adapter renews them with the refresh token before expiry and saves whatever Aries returns, a rotated refresh token included.
 - No numeric REST rate limit is documented. The adapter honours HTTP 429 and `Retry-After`, polls quotes only while they are subscribed and the market socket is down (15 seconds by default), and batches chart quotes 50 symbols at a time.
 - Three unauthenticated cross-origin probes (the token preflight, a GET preflight and a GET) returned HTTP 403 without `Access-Control-Allow-Origin`, so the API cannot be called from a browser and the plugin does not ship Gloom's web target.
 - Error bodies are not shown to users: a fixed message stands in for each status, in case a body echoes request data.
 
-## OAuth for other users
+## Sign in with Aries
 
-The plugin only supports personal-token clients. For a partner integration that signs in other users:
+The plugin signs users in with PKCE as Gloom's partner client, which has no secret.
 
-1. Authorization-code and PKCE access tokens last 3,600 seconds. The schema's refresh-token example is 31,536,000 seconds, not a guaranteed lifetime: honour `refresh_token_expires_in` and replace a rotated refresh token.
-2. Both flows need a pre-registered redirect URI matching exactly. The guide requires HTTPS in production and does not document loopback HTTP, variable ports or custom schemes, which a desktop app would need.
-3. Confidential clients send `client_secret`; PKCE uses S256, a 43 to 128 character verifier and random `state`, with no secret. Authorization codes are single-use and documented as valid for ten minutes.
-4. Refresh needs only `client_id`, `grant_type: refresh_token` and `refresh_token`.
-5. Key creation in Client Center is self-service, but the [Developer Agreement](https://finance.dev/legal/developer-agreement) requires written authorization to facilitate other users' account access or trading.
+1. The browser opens `https://app.aries.com/oauth2/authorize` with `response_type=code`, an S256 `code_challenge`, a random `state` and the scopes in [setup](setup.md). The page is an app that shows its login for any client or redirect, so nothing is checked until the user logs in.
+2. The redirect must match a registered URI character for character, trailing slash included. Gloom listens on `http://127.0.0.1:47613/callback`, the loopback form RFC 8252 sets out for native apps. The token endpoint answers `INVALID_REDIRECT_URI` for one not registered, `CLIENT_NOT_FOUND` for an unknown client.
+3. The exchange is `POST /v1/oauth2/token` with `grant_type: code` (not `authorization_code`), `client_id`, `code`, `redirect_uri` and `code_verifier`. JSON and form bodies both work.
+4. Renewal sends `grant_type: refresh_token`, `client_id` and `refresh_token`, no secret. Aries checks the refresh token before anything else (`INVALID_REFRESH_TOKEN`), so whether a public client renews without a secret shows only with a real sign-in. A refused renewal ends the sign-in, and the profile asks to connect again.
+5. Client credentials on the partner client answer "client_secret is required": that grant is for personal-token clients only.
+6. The [Developer Agreement](https://finance.dev/legal/developer-agreement) requires written authorization to facilitate other users' account access or trading.
