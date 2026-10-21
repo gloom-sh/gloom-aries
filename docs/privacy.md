@@ -2,7 +2,9 @@
 
 ## Where requests go
 
-Requests go straight from your machine to `https://api.aries.com`. Signing in opens `app.aries.com` in your browser, which hands the sign-in back to Gloom on `127.0.0.1`. Tokens, credentials and raw Aries error bodies are never logged or shown.
+Requests go straight from your machine to `https://api.aries.com`. Tokens, credentials and raw Aries error bodies are never logged or shown.
+
+Signing in opens `app.aries.com` in your browser. Aries sends the browser back to `api.gloom.sh/brokers/aries/callback`, the address it registered for Gloom, and that page passes it straight on to Gloom on `127.0.0.1` with the one-time code. Gloom's server exchanges, stores and logs nothing, and the code is useless without the key Gloom keeps on your machine for that sign-in (PKCE). Gloom then exchanges it with Aries directly.
 
 ## With Gloom Cloud on
 

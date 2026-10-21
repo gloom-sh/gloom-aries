@@ -408,7 +408,7 @@ describe("Aries account sign-in in the adapter", () => {
     const broker = createAriesBroker({
       fetch, sockets: false, assertLocal: () => {},
       persist: (id, values) => { saved.push({ id, values }); },
-      authorize: async () => { authorizations.push(Date.now()); return { code: "synthetic-code", verifier: "synthetic-verifier", redirectUri: "http://127.0.0.1:47613/callback" }; },
+      authorize: async () => { authorizations.push(Date.now()); return { code: "synthetic-code", verifier: "synthetic-verifier", redirectUri: "https://api.gloom.sh/brokers/aries/callback" }; },
       ...signIn,
     });
     brokers.push(broker);
@@ -449,7 +449,7 @@ describe("Aries account sign-in in the adapter", () => {
     let asked = 0;
     const { broker, account } = signInSetup({
       signInWaitMs: 50,
-      authorize: () => { asked++; return new Promise((resolve) => { finish = () => resolve({ code: "synthetic-code", verifier: "synthetic-verifier", redirectUri: "http://127.0.0.1:47613/callback" }); }); },
+      authorize: () => { asked++; return new Promise((resolve) => { finish = () => resolve({ code: "synthetic-code", verifier: "synthetic-verifier", redirectUri: "https://api.gloom.sh/brokers/aries/callback" }); }); },
     });
     const added = account("added-profile", { signInPending: true });
     const syncs = Promise.allSettled([broker.importPortfolioSnapshot!(added), broker.listAccounts!(added)]);

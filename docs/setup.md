@@ -7,7 +7,7 @@
 
 ## Sign in
 
-Open **Brokers**, add **Aries**, leave **Sign in with** on **Aries account** and press **Connect**. Your browser opens Aries: log in and allow Gloom. Aries returns you to Gloom on `127.0.0.1` port 47613, so that port must be free.
+Open **Brokers**, add **Aries**, leave **Sign in with** on **Aries account** and press **Connect**. Your browser opens Aries: log in and allow Gloom. Aries sends the browser to `api.gloom.sh`, which passes it straight on to Gloom on `127.0.0.1` port 47613, so that port must be free. No Gloom account is needed.
 
 Gloom renews the sign-in on its own. When Aries ends it, the profile says so: press **Connect** to sign in again.
 

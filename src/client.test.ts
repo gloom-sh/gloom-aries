@@ -126,8 +126,8 @@ describe("Aries account sign-in", () => {
         : json({ access_token: "account-bearer-2", expires_in: 3600, refresh_token: "account-refresh-2" });
     } });
     await expect(client.get("/v2/users/me/accounts")).rejects.toThrow("press Connect");
-    await client.signIn(async () => ({ code: "synthetic-code", verifier: "synthetic-verifier", redirectUri: "http://127.0.0.1:47613/callback" }));
-    expect(grants[0]).toEqual({ grant_type: "code", client_id: "ARI-PARTNER.synthetic", code: "synthetic-code", redirect_uri: "http://127.0.0.1:47613/callback", code_verifier: "synthetic-verifier" });
+    await client.signIn(async () => ({ code: "synthetic-code", verifier: "synthetic-verifier", redirectUri: "https://api.gloom.sh/brokers/aries/callback" }));
+    expect(grants[0]).toEqual({ grant_type: "code", client_id: "ARI-PARTNER.synthetic", code: "synthetic-code", redirect_uri: "https://api.gloom.sh/brokers/aries/callback", code_verifier: "synthetic-verifier" });
     expect(await client.get<{ bearer: string }>("/v2/users/me/accounts")).toEqual({ bearer: "Bearer account-bearer-1" });
     now += 3_600_000;
     expect(await client.get<{ bearer: string }>("/v2/users/me/accounts")).toEqual({ bearer: "Bearer account-bearer-2" });

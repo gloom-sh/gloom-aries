@@ -1,13 +1,17 @@
 /**
  * Signing in with an Aries account: OAuth2 with PKCE in the user's own browser, caught on this
  * machine. Gloom is a public client, so it has no secret; the code verifier proves the sign-in
- * started here. The redirect is a loopback address Aries has registered for Gloom.
+ * started here. Aries accepts only the https redirect it registered for Gloom, and that page
+ * (Gloom's API) passes the browser straight on to the listener here with the code and state:
+ * it exchanges and keeps nothing, and without the verifier the code is no use to anyone else.
  */
 
 /** Gloom's partner client at Aries. Public by design: a PKCE client has no secret. */
 export const ARIES_PARTNER_CLIENT_ID = "ARI-PARTNER.MTc5MjUyNzgwMzA3NTQ2MzAwMg.7vBKF7dYtJ5z8nNnV7QsMPeNjmPhcCqNSglzpuJqSfk";
+/** Where Gloom's API sends the browser on to: fixed there, so it is fixed here. */
 export const ARIES_SIGN_IN_PORT = 47613;
-export const ARIES_REDIRECT_URI = `http://127.0.0.1:${ARIES_SIGN_IN_PORT}/callback`;
+/** The redirect Aries registered for Gloom. The authorize request and the exchange both name it. */
+export const ARIES_REDIRECT_URI = "https://api.gloom.sh/brokers/aries/callback";
 export const ARIES_SCOPES = "account:information market:information market:supplemental order:information order:execution";
 const AUTHORIZE_URL = "https://app.aries.com/oauth2/authorize";
 /** The browser tab can stay open this long before the sign-in is given up. */
@@ -129,7 +133,7 @@ export function ariesBrowserSignIn(options: { clientId?: string; port?: number; 
   const authorization = (async () => {
     const { verifier, challenge, state } = await ariesPkce();
     const listener = listenForAriesCallback({ state, port: options.port, timeoutMs: options.timeoutMs });
-    const redirectUri = `http://127.0.0.1:${listener.port}/callback`;
+    const redirectUri = ARIES_REDIRECT_URI;
     const page = ariesAuthorizeUrl({ clientId: options.clientId ?? ARIES_PARTNER_CLIENT_ID, redirectUri, challenge, state });
     shown(page);
     if (!await open(page)) {
