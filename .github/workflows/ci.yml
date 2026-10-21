@@ -9,7 +9,7 @@ jobs:
     env:
       NODE_ENV: test
       # The Gloom revision whose plugin API the plugin is checked against.
-      GLOOMBERB_REVISION: f8166f48036ac6b5e83cdc16b91dddf95a0ece5d
+      GLOOMBERB_REVISION: 5c237fb7df0ee589165f51fe07a885ca917d0618
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
