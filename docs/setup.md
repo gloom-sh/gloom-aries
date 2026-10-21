@@ -28,7 +28,7 @@ Gloom asks for the same scopes when you sign in. A key needs them too:
 ## Profile settings
 
 - **Include accounts** starts on **Simulation**. Choose **Live** or **Both** only when you mean to import those accounts.
-- **Enable trading** starts **Off**.
+- **Enable trading** starts **On**. Set it to **Off** for a read-only profile.
 - **Account data** decides whether your accounts and positions sync with Gloom Cloud ([privacy](privacy.md)).
 
 ## Where it shows up

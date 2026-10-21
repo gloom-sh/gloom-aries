@@ -9,7 +9,7 @@ Trade your Aries account from Gloom: accounts, live quotes, charts, option chain
 1. Install [Gloom](https://gloom.sh) 0.18.2 or later.
 2. Open **Plugins** (`PL`), find **Aries** and install it.
 3. Open **Brokers** (`BR`), add **Aries** and press **Connect**. Sign in to Aries in the browser that opens.
-4. Start on **Simulation**. Turn on **Enable trading** to place orders.
+4. Start on **Simulation**. **Enable trading** is on, so you can place orders; set it to Off for a read-only profile.
 
 [TESTING.md](TESTING.md) walks through a first simulation order. A personal API client from Aries Client Center also works ([setup](docs/setup.md)).
 

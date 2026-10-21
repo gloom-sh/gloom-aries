@@ -12,7 +12,7 @@ About 10 minutes. You need an Aries login with a **simulation** account.
 ## 2. Sign in
 
 1. Open **Brokers** (`BR`), choose **Add Broker Account**, then **Aries**.
-2. Leave **Sign in with** on **Aries account** and **Include accounts** on **Simulation only**. Set **Enable trading** to **On**.
+2. Leave **Sign in with** on **Aries account**, **Include accounts** on **Simulation only** and **Enable trading** on **On**.
 3. Press **Connect**. Your browser opens Aries: log in and allow Gloom.
 
 Your simulation account and positions appear in Brokers and Portfolio. Gloom keeps you signed in on this device.
