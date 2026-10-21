@@ -392,3 +392,78 @@ describe("Aries profile changes during pending requests", () => {
     unsubscribe();
   });
 });
+
+describe("Aries account sign-in in the adapter", () => {
+  function signInSetup(signIn: { authorize?: () => Promise<{ code: string; verifier: string; redirectUri: string }>; signInWaitMs?: number } = {}) {
+    const authorizations: number[] = [];
+    const saved: Array<{ id: string; values: Record<string, unknown> }> = [];
+    const fetch: AriesFetch = async (url) => {
+      const path = new URL(url).pathname;
+      if (path.endsWith("/token")) return json({ access_token: "account-bearer", expires_in: 3600, refresh_token: "account-refresh" });
+      if (path === "/v2/users/me/accounts") return json({ accounts: syntheticAccounts });
+      if (path.endsWith("/balance")) return json({ balance: "1000", cashBalance: "900", netBuyingPower: "1800" });
+      if (path.endsWith("/positions")) return json({ positions: [] });
+      return json({});
+    };
+    const broker = createAriesBroker({
+      fetch, sockets: false, assertLocal: () => {},
+      persist: (id, values) => { saved.push({ id, values }); },
+      authorize: async () => { authorizations.push(Date.now()); return { code: "synthetic-code", verifier: "synthetic-verifier", redirectUri: "http://127.0.0.1:47613/callback" }; },
+      ...signIn,
+    });
+    brokers.push(broker);
+    const account = (id: string, config: Record<string, unknown> = {}): BrokerInstanceConfig => ({ id, brokerType: "aries", label: "Aries", config: { auth: "account", accounts: "simulation", ...config } });
+    return { broker, authorizations, saved, account };
+  }
+
+  test("a profile just added signs in on its first sync and keeps its tokens; one from before only says to connect", async () => {
+    const { broker, authorizations, saved, account } = signInSetup();
+    const added = account("added-profile", { signInPending: true });
+    const snapshot = await broker.importPortfolioSnapshot!(added);
+    expect(snapshot.accounts.map((value) => value.accountId)).toEqual(["SYNTH-SIM-ACCOUNT"]);
+    expect(authorizations).toHaveLength(1);
+    expect(saved.at(-1)).toEqual({ id: "added-profile", values: { accessToken: "account-bearer", accessTokenExpiresAt: expect.any(Number), refreshToken: "account-refresh", signInPending: false } });
+    // A launch syncs every profile: one without a sign-in never opens the browser for it.
+    const earlier = account("earlier-profile");
+    await expect(broker.importPortfolioSnapshot!(earlier)).rejects.toThrow("press Connect");
+    expect(broker.getStatus!(earlier).state).toBe("error");
+    expect(authorizations).toHaveLength(1);
+    await broker.connect!(earlier);
+    expect(authorizations).toHaveLength(2);
+    expect(broker.getStatus!(earlier).state).toBe("connected");
+  });
+
+  test("saving the form keeps an account sign-in, a personal client keeps none, and a profile from before sign-in stays personal", () => {
+    const { broker, account } = signInSetup();
+    const signedIn = account("signed-in", { accessToken: "account-bearer", accessTokenExpiresAt: 5, refreshToken: "account-refresh" });
+    const form = broker.toConfigValues!(signedIn);
+    expect(form).toEqual({ auth: "account", clientToken: "", clientSecret: "", accounts: "simulation", enableTrading: "false" });
+    expect(broker.fromConfigValues!({ ...form, enableTrading: "true" }, signedIn)).toMatchObject({ refreshToken: "account-refresh", enableTrading: "true" });
+    expect(broker.fromConfigValues!({ ...form, auth: "personal", clientToken: "ARI-PERSONAL-TK.x", clientSecret: "s" }, signedIn)).not.toHaveProperty("refreshToken");
+    expect(broker.fromConfigValues!(form)).toMatchObject({ auth: "account", signInPending: true });
+    expect(broker.toConfigValues!(profile())).toMatchObject({ auth: "personal", clientToken: "ARI-PERSONAL-TK.synthetic-client" });
+  });
+
+  test("syncs during a sign-in wait for it, and one that lands after Connect stopped waiting connects on its own", async () => {
+    let finish!: () => void;
+    let asked = 0;
+    const { broker, account } = signInSetup({
+      signInWaitMs: 50,
+      authorize: () => { asked++; return new Promise((resolve) => { finish = () => resolve({ code: "synthetic-code", verifier: "synthetic-verifier", redirectUri: "http://127.0.0.1:47613/callback" }); }); },
+    });
+    const added = account("added-profile", { signInPending: true });
+    const syncs = Promise.allSettled([broker.importPortfolioSnapshot!(added), broker.listAccounts!(added)]);
+    await Bun.sleep(5);
+    expect(broker.getStatus!(added)).toMatchObject({ state: "connecting", message: "Finish signing in to Aries in your browser" });
+    finish();
+    expect((await syncs).map((result) => result.status)).toEqual(["fulfilled", "fulfilled"]);
+    expect(asked).toBe(1);
+    const later = account("later-profile");
+    await expect(broker.connect!(later)).rejects.toThrow("then press Connect");
+    expect(broker.getStatus!(later).state).toBe("connecting");
+    finish();
+    for (let wait = 0; wait < 50 && broker.getStatus!(later).state !== "connected"; wait++) await Bun.sleep(5);
+    expect(broker.getStatus!(later).state).toBe("connected");
+    expect(asked).toBe(2);
+  });
+});

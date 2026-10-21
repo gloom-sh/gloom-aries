@@ -109,3 +109,46 @@ describe("Aries authentication and transport", () => {
     await expect(client.post("/v1/predictions/orders", {})).rejects.toThrow("Unsupported");
   });
 });
+
+describe("Aries account sign-in", () => {
+  const account = (tokens?: Record<string, unknown>, saved: unknown[] = []) => ({ clientId: "ARI-PARTNER.synthetic", tokens, onTokens: (value: unknown) => { saved.push(value); } });
+
+  test("a sign-in exchanges the browser's code with its verifier and no secret, and keeps a renewed token Aries rotates", async () => {
+    let now = 1_000_000;
+    const saved: unknown[] = [];
+    const grants: Record<string, unknown>[] = [];
+    const client = new AriesClient({ clientToken: "", clientSecret: "", account: account(undefined, saved), now: () => now, fetch: async (url, init) => {
+      if (!url.endsWith("/token")) return json({ bearer: new Headers(init?.headers).get("Authorization") });
+      const grant = JSON.parse(String(init?.body));
+      grants.push(grant);
+      return grant.grant_type === "code"
+        ? json({ access_token: "account-bearer-1", expires_in: 3600, refresh_token: "account-refresh-1" })
+        : json({ access_token: "account-bearer-2", expires_in: 3600, refresh_token: "account-refresh-2" });
+    } });
+    await expect(client.get("/v2/users/me/accounts")).rejects.toThrow("press Connect");
+    await client.signIn(async () => ({ code: "synthetic-code", verifier: "synthetic-verifier", redirectUri: "http://127.0.0.1:47613/callback" }));
+    expect(grants[0]).toEqual({ grant_type: "code", client_id: "ARI-PARTNER.synthetic", code: "synthetic-code", redirect_uri: "http://127.0.0.1:47613/callback", code_verifier: "synthetic-verifier" });
+    expect(await client.get<{ bearer: string }>("/v2/users/me/accounts")).toEqual({ bearer: "Bearer account-bearer-1" });
+    now += 3_600_000;
+    expect(await client.get<{ bearer: string }>("/v2/users/me/accounts")).toEqual({ bearer: "Bearer account-bearer-2" });
+    expect(grants[1]).toEqual({ grant_type: "refresh_token", client_id: "ARI-PARTNER.synthetic", refresh_token: "account-refresh-1" });
+    expect(saved.at(-1)).toEqual({ accessToken: "account-bearer-2", accessTokenExpiresAt: now + 3_600_000, refreshToken: "account-refresh-2" });
+  });
+
+  test("a refused renewal forgets the sign-in and says to sign in again, without asking Aries again", async () => {
+    const saved: unknown[] = [];
+    let renewals = 0;
+    const client = new AriesClient({ clientToken: "", clientSecret: "", account: account({ refreshToken: "account-refresh-old" }, saved), fetch: async (url) => {
+      if (url.endsWith("/token")) { renewals++; return json({ error: "Invalid or expired refresh token", echo: "account-refresh-old" }, 401); }
+      return json({});
+    } });
+    expect(client.signedIn()).toBe(true);
+    const failure = await client.get("/v1/chart/quotes").catch((error) => error);
+    expect(failure).toMatchObject({ status: 401, message: "Your Aries sign-in has ended. Press Connect in Brokers to sign in again." });
+    expect(saved).toEqual([null]);
+    expect(client.signedIn()).toBe(false);
+    await expect(client.get("/v1/chart/quotes")).rejects.toThrow("press Connect");
+    expect(renewals).toBe(1);
+  });
+});
+

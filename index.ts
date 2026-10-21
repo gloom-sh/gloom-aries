@@ -10,7 +10,12 @@ export const ariesPlugin: GloomPlugin = {
   toggleable: true, targets: ["cli", "tui", "desktop"], hosts: ["api.aries.com"],
   capabilities: [ariesMarketCapability],
   setup(ctx) {
-    setAriesLocalGuard(() => assertLocalProfile(ctx.getConfig()), (id) => ctx.getConfig().brokerInstances.find((instance) => instance.id === id));
+    setAriesLocalGuard(
+      () => assertLocalProfile(ctx.getConfig()),
+      (id) => ctx.getConfig().brokerInstances.find((instance) => instance.id === id),
+      // A renewed sign-in is saved with the profile on this device; broker settings never sync.
+      (id, values) => ctx.updateBrokerInstance?.(id, values),
+    );
     setAriesMarketConfig(() => ctx.getConfig());
     ctx.registerBroker(ariesBroker);
     ctx.registerPaneTemplate(ariesAccountsTemplate);
